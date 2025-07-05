@@ -2,7 +2,7 @@
 
 
 
-uint16_t Ping::Caluclate_checksum(uint16_t * buffer, int length)
+uint16_t Ping::Caluclate_checksum(uint16_t * buffer, size_t length) const
 {
   uint32_t sum = 0;
 
@@ -13,7 +13,6 @@ uint16_t Ping::Caluclate_checksum(uint16_t * buffer, int length)
 
   if (length == 1) {
     sum += *reinterpret_cast <uint8_t *> (buffer) << 8;
-    // sum += *(uint8_t *)buffer;
   };
 
   while (sum >> 16) {
@@ -38,14 +37,14 @@ bool Ping::Sen_ping(uint32_t target_ip)
   const char * data_msg = "Ping ping ping ...";
   std::strncpy(packet.data, data_msg, sizeof(packet.data) - 1);
 
-  struct timeval * Tv = reinterpret_cast <struct timeval *> (packet.data);
+  const auto Tv = reinterpret_cast <struct timeval *> (packet.data);
   gettimeofday(Tv, nullptr);
 
   packet.Header.checksum = Caluclate_checksum(
     reinterpret_cast <uint16_t *>(&packet), sizeof(packet)
   );
 
-  ssize_t bytes_sent = sendto(Sockfd, &packet, sizeof(packet), 0,
+  const ssize_t bytes_sent = sendto(Sockfd, &packet, sizeof(packet), 0,
     reinterpret_cast <struct sockaddr *>(&Target_addr), sizeof(Target_addr)
   );
 
@@ -63,13 +62,13 @@ bool Ping::Sen_ping(uint32_t target_ip)
 };
 
 
-bool Ping::Receive_ping()
+bool Ping::Receive_ping() const
 {
   char buffer[1024];
   struct sockaddr_in From_Addr;
   socklen_t from_len = sizeof(From_Addr);
 
-  ssize_t bytes_received = recvfrom(Sockfd, &buffer, sizeof(buffer), 0,
+  const ssize_t bytes_received = recvfrom(Sockfd, &buffer, sizeof(buffer), 0,
     reinterpret_cast <struct sockaddr *>(&From_Addr), &from_len
   );
 
@@ -84,10 +83,12 @@ bool Ping::Receive_ping()
     return false;
   };
 
-  struct iphdr * Ip_Header = reinterpret_cast <struct iphdr *>(buffer);
-  struct icmphdr * Icmp_Header = reinterpret_cast <struct icmphdr *>(buffer + (Ip_Header->ihl * 4));
+  const auto Ip_Header = reinterpret_cast <struct iphdr *>(buffer);
 
-  if (Icmp_Header->type != ICMP_ECHOREPLY
+  if (const auto Icmp_Header =
+    reinterpret_cast <struct icmphdr *>(buffer + (Ip_Header->ihl * 4));
+
+    Icmp_Header->type != ICMP_ECHOREPLY
     && Icmp_Header->un.echo.id == Identifier
     && From_Addr.sin_addr.s_addr == Target_addr.sin_addr.s_addr
   ) {
@@ -104,7 +105,7 @@ bool Ping::Receive_ping()
 };
 
 
-std::string Ping::Get_mac_address(const std::string & ip_address)
+std::string Ping::Get_mac_address(const std::string & ip_address) const
 {
   if (std::string mac = Read_proc_arp(ip_address);
     !mac.empty()
@@ -116,21 +117,21 @@ std::string Ping::Get_mac_address(const std::string & ip_address)
 };
 
 
-std::string Ping::Read_proc_arp(const std::string & ip_address)
+std::string Ping::Read_proc_arp(const std::string & ip_address) const
 {
   std::ifstream arp_file("/proc/net/arp");
   if (!arp_file.is_open()) {
     return "";
   };
 
-  std::string line = "";
+  std::string line;
   while (std::getline(arp_file, line)) {
     std::istringstream iss(line);
-    std::string ip = "", hw_type = "", flags = "";
-    std::string mac = "", mask = "", device = "";
 
-    if (iss >> ip >> hw_type >> flags >> mac >> mask >> device) {
-      if (std::string standart_mac = "00:00:00:00:00:00";
+    if (std::string ip, hw_type, flags, mac, mask, device;
+      iss >> ip >> hw_type >> flags >> mac >> mask >> device
+    ) {
+      if (const std::string standart_mac = "00:00:00:00:00:00";
         ip == ip_address && mac != standart_mac && flags != "0x0"
       ) {
         return Format_mac_address(mac);
@@ -142,9 +143,9 @@ std::string Ping::Read_proc_arp(const std::string & ip_address)
 };
 
 
-std::string Ping::Execute_arp_command(const std::string & ip_address)
+std::string Ping::Execute_arp_command(const std::string & ip_address) const
 {
-  std::string command = "arp -n" + ip_address + " 2>/dev/null";
+  const std::string command = "arp -n" + ip_address + " 2>/dev/null";
   FILE * pipe = popen(command.c_str(), "r");
 
   if (!pipe) {
@@ -152,20 +153,20 @@ std::string Ping::Execute_arp_command(const std::string & ip_address)
   };
 
   char buffer[256];
-  std::string result = "";
+  std::string result;
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     result += buffer;
   };
 
-  if (int exit_code = pclose(pipe);
+  if (const int exit_code = pclose(pipe);
     exit_code != 0
   ) {
     return "";
   };
 
   std::istringstream iss(result);
-  std::string line = "";
+  std::string line;
 
   while (std::getline(iss, line)) {
     if (line.find(ip_address) != std::string::npos
@@ -179,15 +180,16 @@ std::string Ping::Execute_arp_command(const std::string & ip_address)
 };
 
 
-std::string Ping::Extract_mac_from_line(const std::string & line)
+std::string Ping::Extract_mac_from_line(const std::string & line) const
 {
   for (size_t i = 0; i < line.size() - 16; ++i) {
     if (std::isxdigit(line[i])
       && std::isxdigit(line[i + 1])
       && line[i + 2] == ':'
     ) {
-      std::string candidate = line.substr(i, 17);
-      if (Is_valid_mac(candidate)) {
+      if (const std::string candidate = line.substr(i, 17);
+        Is_valid_mac(candidate)
+      ) {
         return Format_mac_address(candidate);
       };
     };
@@ -197,7 +199,7 @@ std::string Ping::Extract_mac_from_line(const std::string & line)
 };
 
 
-bool Ping::Is_valid_mac(const std::string & mac)
+bool Ping::Is_valid_mac(const std::string & mac) const
 {
   if (mac.size() != 17) {
     return false;
@@ -220,11 +222,11 @@ bool Ping::Is_valid_mac(const std::string & mac)
 };
 
 
-std::string Ping::Format_mac_address(const std::string & mac)
+std::string Ping::Format_mac_address(const std::string & mac) const
 {
   std::string formatted = mac;
   for (char & c : formatted) {
-    c = std::toupper(c);
+    c = static_cast<char> (std::toupper(c));
   };
 
   return formatted;
@@ -236,8 +238,8 @@ bool Ping::Resolve_and_ping(const std::string & target)
   std::memset(&Target_addr, 0, sizeof(Target_addr));
   Target_addr.sin_family = AF_INET;
 
-  if (inet_pton(AF_INET, target.c_str(),
-    &Target_addr.sin_addr) == 1
+  if (
+    inet_pton(AF_INET, target.c_str(), &Target_addr.sin_addr) == 1
   ) {
     return true;
   };
@@ -248,8 +250,11 @@ bool Ping::Resolve_and_ping(const std::string & target)
   Hints.ai_family = AF_INET;
   Hints.ai_socktype = SOCK_RAW;
 
-  int result = getaddrinfo(target.c_str(), nullptr, &Hints, &Result);
-  if (result != 0 || !Result) {
+  if (const int result =
+    getaddrinfo(target.c_str(), nullptr, &Hints, &Result);
+
+    result != 0 || !Result
+  ) {
     std::cerr << "getaddrinfo() failed: "
       << gai_strerror(result) << "(" << target << ")"
     << std::endl;
@@ -257,7 +262,7 @@ bool Ping::Resolve_and_ping(const std::string & target)
     return false;
   };
 
-  struct sockaddr_in * Ipv4 = reinterpret_cast <struct sockaddr_in *>(Result->ai_addr);
+  const auto Ipv4 = reinterpret_cast <struct sockaddr_in *>(Result->ai_addr);
   Target_addr.sin_addr = Ipv4->sin_addr;
 
   freeaddrinfo(Result);
@@ -266,7 +271,7 @@ bool Ping::Resolve_and_ping(const std::string & target)
 };
 
 
-Ping::Ping() : Sockfd(-1), Sequence(0)
+Ping::Ping()
 {
   Identifier = getpid() & 0xFFFF;
 };
@@ -295,7 +300,8 @@ bool Ping::Initialize()
   Timeout.tv_usec = 0;
 
   if (setsockopt(Sockfd, SOL_SOCKET,SO_RCVTIMEO,
-    &Timeout, sizeof(Timeout)) < 0
+      &Timeout, sizeof(Timeout)
+    ) < 0
   ) {
     std::cerr << "setsockopt() failed" << strerror(errno) << std::endl;
 
@@ -321,8 +327,6 @@ void Ping::Do_ping(const std::string & target)
   << std::endl;
 
   for (int i = 0; i < 3; ++i) {
-    auto start_time = std::chrono::high_resolution_clock::now();
-
     if (Sen_ping(Target_addr.sin_addr.s_addr)) {
       if (Receive_ping()) {
         if (std::string mac = Get_mac_address(inet_ntoa(Target_addr.sin_addr));
@@ -337,7 +341,7 @@ void Ping::Do_ping(const std::string & target)
     };
 
     std::cout << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
   };
 };
 
